@@ -92,8 +92,8 @@ ios {
     QGIS_INCLUDE_DIR = $${QGIS_INSTALL_PATH}/include/qgis
     QGIS_QML_DIR = $${QGIS_INSTALL_PATH}/qml
   }
-
-  isEmpty(QGIS_INSTALL_PATH) {
+  else
+  {
     # using QGIS from build directory (has different layout of directories)
     # expecting QGIS_SRC_DIR and QGIS_BUILD_DIR defined
     QGIS_PREFIX_PATH = $${QGIS_BUILD_DIR}/output
@@ -125,7 +125,7 @@ ios {
   }
 
   exists($${QGIS_LIB_DIR}/libqgis_core.so) {
-    message("Building from QGIS: $${QGIS_INSTALL_PATH}")
+    message("Building from QGIS: $${QGIS_SRC_DIR} and $${QGIS_BUILD_DIR}")
   } else {
     error("Missing QGIS Core library in $${QGIS_LIB_DIR}/libqgis_core.so")
   }
@@ -133,6 +133,10 @@ ios {
   INCLUDEPATH += $${QGIS_INCLUDE_DIR}
   LIBS += -L$${QGIS_LIB_DIR}
   LIBS += -lqgis_core -lqgis_quick
+
+  # geodiff support
+  LIBS += -L$${GEODIFF_BUILD_DIR} -lgeodiff
+  INCLUDEPATH += $${GEODIFF_SRC_DIR}/geodiff/src
 }
 
 # TESTING stuff (only desktop)
@@ -175,3 +179,9 @@ QMAKE_CXXFLAGS += -std=c++11
 
 include(android.pri)
 include(ios.pri)
+
+HEADERS += \
+  geodiffutils.h
+
+SOURCES += \
+  geodiffutils.cpp
