@@ -92,8 +92,8 @@ ios {
     QGIS_INCLUDE_DIR = $${QGIS_INSTALL_PATH}/include/qgis
     QGIS_QML_DIR = $${QGIS_INSTALL_PATH}/qml
   }
-  else
-  {
+
+  isEmpty(QGIS_INSTALL_PATH) {
     # using QGIS from build directory (has different layout of directories)
     # expecting QGIS_SRC_DIR and QGIS_BUILD_DIR defined
     QGIS_PREFIX_PATH = $${QGIS_BUILD_DIR}/output
