@@ -135,8 +135,11 @@ ios {
   LIBS += -lqgis_core -lqgis_quick
 
   # geodiff support
-  LIBS += -L$${GEODIFF_BUILD_DIR} -lgeodiff
-  INCLUDEPATH += $${GEODIFF_SRC_DIR}/geodiff/src
+  !isEmpty(GEODIFF_SRC_DIR) {
+    LIBS += -L$${GEODIFF_BUILD_DIR}
+    INCLUDEPATH += $${GEODIFF_SRC_DIR}/geodiff/src
+  }
+  LIBS += -lgeodiff
 }
 
 # TESTING stuff (only desktop)

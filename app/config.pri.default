@@ -29,3 +29,7 @@ ios {
   QGIS_QUICK_DATA_PATH = INPUT # should be relative path
   QMAKE_IOS_DEPLOYMENT_TARGET = 12.0
 }
+
+# geodiff library - if being used from a custom build
+GEODIFF_SRC_DIR = /my/path/to/geodiff
+GEODIFF_BUILD_DIR = $${GEODIFF_SRC_DIR}/build
