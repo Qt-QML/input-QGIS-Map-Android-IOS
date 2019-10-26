@@ -188,9 +188,3 @@ QMAKE_CXXFLAGS += -std=c++11
 
 include(android.pri)
 include(ios.pri)
-
-HEADERS += \
-  geodiffutils.h
-
-SOURCES += \
-  geodiffutils.cpp

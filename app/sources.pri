@@ -13,7 +13,8 @@ merginapistatus.cpp \
 merginprojectmodel.cpp \
 androidutils.cpp \
 iosutils.cpp \
-inpututils.cpp
+inpututils.cpp \
+geodiffutils.cpp
 
 HEADERS += \
 localprojectsmanager.h \
@@ -29,7 +30,8 @@ merginapistatus.h \
 merginprojectmodel.h \
 androidutils.h \
 iosutils.h \
-inpututils.h
+inpututils.h \
+geodiffutils.h
 
 contains(DEFINES, INPUT_TEST) {
   SOURCES += test/testmerginapi.cpp
