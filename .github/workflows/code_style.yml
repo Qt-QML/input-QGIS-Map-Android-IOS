@@ -1,0 +1,51 @@
+name: Code Layout
+
+env:
+  QT_VERSION: '6.2.0'
+on:
+  push:
+    paths:
+    - 'app/**'
+    - 'core/**'
+    - 'qgsquick/**'
+
+  release:
+    types:
+      - published
+
+jobs:
+  code_style_cpp:
+    name: C++ code convention check
+    if: ( github.repository == 'lutraconsulting/input' ) && (!contains(github.event.head_commit.message, 'Translate '))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install astyle
+        run: |
+          sudo apt-get install astyle
+
+      - name: Checkout input
+        uses: actions/checkout@v2
+        with:
+          path: input
+
+      - name: Run astyle check
+        run: |
+          ./input/scripts/format_cpp.bash
+
+  code_style_qml:
+    name: QML code convention check
+    if: ${{ false }}  # disable for now
+    # if: ( github.repository == 'lutraconsulting/input' ) && (!contains(github.event.head_commit.message, 'Translate '))
+    runs-on: macos-latest
+    steps:
+
+      - name: Checkout app
+        uses: actions/checkout@v2
+        with:
+          path: input
+
+      - name: Install deps
+        run: brew install martindelille/tap/qmlfmt
+
+      - name: Run style check
+        run: ./input/scripts/format_qml.bash

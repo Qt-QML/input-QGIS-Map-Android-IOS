@@ -2,7 +2,7 @@ looking for android [publishing](./publishing.md)
 
 # Development
 
-Tested: Linux, MacOs (Desktop only), iOS
+Tested: Linux, MacOs, iOS
 In general you need `qgis_core` and `qgis_quick` libraries build for target platform.
 
 You need to copy and edit config.in with your paths!
@@ -12,84 +12,29 @@ cp config.pri.default config.pri
 # nano config.pri
 ```
 
-## Development Linux - Desktop
+Notes:
 
-Requirements:
+1. If you have "error: undefined reference to 'stdout'" or so, make sure that in BUILD ENV you have ANDROID_NDK_PLATFORM=android-24 or later!
 
-- Qt5.x
-- QGIS 3.x prerequsities
-
-You can either build qgis_quick library or use ony from QGIS 3.4+ installation
-For building QGIS use these flags WITH_QUICK=TRUE, WITH_GUI=FALSE, WITH_DESKTOP=FALSE, WITH_BINDINGS=FALSE
-
-```
-cd repo/QGIS/build-cmd
-cmake \
-   -GNinja \
-   -DCMAKE_BUILD_TYPE=Release \
-   -DCMAKE_INSTALL_PREFIX=~/qmobile/apps \
-   -DWITH_GUI=FALSE \
-   -DWITH_QUICK=TRUE \
-   -DWITH_QTWEBKIT=FALSE \
-   -DENABLE_TESTS=FALSE \
-   -DWITH_BINDINGS=FALSE \
-   ..
-ninja
-ninja install
-```
-
-Now you need to edit input/config.pri with paths to your QGIS installation and build with qmake
-
-And run
-
-```
-#!/bin/bash
-APP=~/qmobile/apps
-
-LD_LIBRARY_PATH=$APP/lib/ \
-QML2_IMPORT_PATH=$APP/qml \
-QGIS_PREFIX_PATH=$APP \
-$APP/bin/input
-```
+2. You may need to export env variable INPUT_ONLY_TARGET_ARCH to select builds to one platform only
 
 ## Development Linux Cross-Compilation for Android
 
-Same requirements as for Linux Desktop
-
 Requirements Android:
-- OSGeo4A
+- input-sdk for Android
+- Qt5 for android
+- android-ndk
+- android-sdk
 
-Build `qgis_core` and `qgis_quick` libraries with OSGeo4A.
-Now you need to edit input/config.pri with paths to your OSGeo4A installation and build with qmake
+How to compile Android:
 
-## Development MacOS Desktop
+  1. edit `config.pri` file with your paths (Qt, input-sdk)
 
-So far only working if you want to build desktop version of the application
 
-Requirements:
- - All QGIS dependencies for qgis-3 receipt from https://github.com/OSGeo/homebrew-osgeo4mac
-
-You can either build qgis_quick library or use ony from QGIS 3.4+ installation. Use same flags as for Linux
-Now you need to edit input/config.pri with paths to your QGIS installation and build with qmake
-
-To run the application from build tree, you need to:
-
-```
-#!/bin/bash
-APP=~/qmobile/Applications
-
-DYLD_FRAMEWORK_PATH=$DYLD_FRAMEWORK_PATH:$APP/QGIS.app/Contents/MacOS/lib:$APP/QGIS.app/Contents/Frameworks \
-QML2_IMPORT_PATH=$APP/QGIS.app/Contents/MacOS/qml \
-QGIS_PREFIX_PATH=$APP/QGIS.app/Contents/MacOS \
-$APP/bin/qgis-quick-components-test
-```
-
-1. append QGIS Frameworks paths to `DYLD_FRAMEWORK_PATH`
-2. append QML path for `qgis_quick` qml dir
 
 ## Development MacOS Cross-Compilation for Android
 
-Same requirements as for Cross-Compilation for Android
+Same requirements as for Linux Cross-Compilation for Android
 
 Quick guide:
 - `brew tap caskroom/versions`
@@ -100,8 +45,8 @@ Quick guide:
 - download SDK command line tools and unzip to `/opt/android-sdk`
 - sdk: install lldb, build tools, platform android X, cmake, platform-tools
 - download QT armv7 to `/opt/Qt`
-- download crystax and install to `/opt/crystax-10.3.2`
-- compile OSGeo4a
+- download NDK and install to `/opt/android-ndk-<ver>`
+- compile input-SDK
 - open QtCreator -> Manage Kits -> add SDK and NDK. compilers should be autodetected
 - enable connection on the device from MacOS when requested
 
@@ -114,5 +59,5 @@ You need to set few env variables:
 
 Run:
 ```
-input --test
+./scripts/run_all_tests.bash input
 ```

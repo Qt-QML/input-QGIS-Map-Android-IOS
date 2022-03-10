@@ -1,24 +1,35 @@
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+
 import QtQuick 2.7
 import QtQuick.Controls 2.2
 import QtQuick.Dialogs 1.1
 import QtQuick.Layouts 1.3
-import QgsQuick 0.1 as QgsQuick
+
 import "."  // import InputStyle singleton
+import "./components"
 
 Item {
     signal openProjectClicked()
     signal myLocationClicked()
     signal myLocationHold()
-    signal addFeatureClicked()
+    signal recordClicked()
     signal openMapThemesClicked()
+    signal openBrowseDataClicked()
     signal openSettingsClicked()
     signal zoomToProject()
-    property alias recordButton: recBtnIcon
 
     property real itemSize: mainPanel.height * 0.8
     property color gpsIndicatorColor: InputStyle.softRed
 
     id: mainPanel
+    focus: true
 
     Rectangle {
         anchors.fill: parent
@@ -48,9 +59,12 @@ Item {
                 id: openProjectBtn
                 width: mainPanel.itemSize
                 text: qsTr("Projects")
-                imageSource: "project.svg"
+                imageSource: InputStyle.projectIcon
 
-                onActivated: mainPanel.openProjectClicked()
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.openProjectClicked()
+                }
             }
         }
 
@@ -65,12 +79,19 @@ Item {
                 width: mainPanel.itemSize
 
                 text: qsTr("GPS")
-                imageSource: "ic_gps_fixed_48px.svg"
-                imageSource2: "ic_gps_not_fixed_48px.svg"
+                imageSource: InputStyle.gpsFixedIcon
+                imageSource2: InputStyle.gpsNotFixedIcon
                 imageSourceCondition: __appSettings.autoCenterMapChecked
 
-                onActivated: mainPanel.myLocationClicked()
-                onActivatedOnHold: mainPanel.myLocationHold()
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.myLocationClicked()
+                }
+
+                onActivatedOnHold: {
+                  rootMenu.close()
+                  mainPanel.myLocationHold()
+                }
 
                 RoundIndicator {
                     width: parent.height/4
@@ -90,19 +111,15 @@ Item {
 
             MainPanelButton {
                 id: recBtn
+
                 width: mainPanel.itemSize
                 text: qsTr("Record")
+                imageSource: InputStyle.recordIcon
 
-                RecordBtn {
-                    id: recBtnIcon
-                    width: mainPanel.itemSize
-                    anchors.top: parent.top
-                    anchors.margins: width/4
-                    anchors.topMargin: -anchors.margins/2
-                    enabled: true
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.recordClicked()
                 }
-
-                onActivated: mainPanel.addFeatureClicked()
             }
         }
 
@@ -117,16 +134,38 @@ Item {
                 id: zoomToProjectBtn
                 width: mainPanel.itemSize
                 text: qsTr("Zoom to project")
-                imageSource: "zoom_to_project.svg"
+                imageSource: InputStyle.zoomToProjectIcon
 
-                onActivated:mainPanel.zoomToProject()
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.zoomToProject()
+                }
+            }
+        }
+
+        Item {
+            id: browseDataItem
+            height: parent.height
+            visible: panelRow.itemsToShow > 5
+            width: visible ? panelRow.calculatedItemWidth : 0
+
+            MainPanelButton {
+                id: browseDataBtn
+                width: mainPanel.itemSize
+                text: qsTr("Browse data")
+                imageSource: InputStyle.tableIcon
+
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.openBrowseDataClicked()
+                }
             }
         }
 
         Item {
             id: mapThemesItem
             height: parent.height
-            visible: panelRow.itemsToShow > 5
+            visible: panelRow.itemsToShow > 6
             width: visible ? panelRow.calculatedItemWidth : 0
 
             MainPanelButton {
@@ -134,8 +173,11 @@ Item {
                 id: mapThemesBtn
                 width: mainPanel.itemSize
                 text: qsTr("Map themes")
-                imageSource: "map_styles.svg"
-                onActivated: mainPanel.openMapThemesClicked()
+                imageSource: InputStyle.mapThemesIcon
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.openMapThemesClicked()
+                }
             }
         }
 
@@ -143,7 +185,7 @@ Item {
         Item {
             id: settingsItem
             height: parent.height
-            visible: panelRow.itemsToShow > 5
+            visible: panelRow.itemsToShow > 6
             width: visible ? panelRow.calculatedItemWidth : 0
 
             MainPanelButton {
@@ -151,8 +193,11 @@ Item {
                 id: settingsBtn
                 width: mainPanel.itemSize
                 text: qsTr("Settings")
-                imageSource: "settings.svg"
-                onActivated: mainPanel.openSettingsClicked()
+                imageSource: InputStyle.settingsIcon
+                onActivated: {
+                  rootMenu.close()
+                  mainPanel.openSettingsClicked()
+                }
             }
         }
 
@@ -165,14 +210,11 @@ Item {
               id: menuBtn
               width: mainPanel.itemSize
               text: qsTr("More")
-              imageSource: "more_menu.svg"
-              onActivated: {
-                if (rootMenu.isClosing) {
-                  rootMenu.isClosing = false
-                } else {
-                  rootMenu.open()
-                }
+              imageSource: InputStyle.moreMenuIcon
 
+              onActivated: {
+                if ( !rootMenu.visible ) rootMenu.open()
+                else rootMenu.close()
               }
             }
         }
@@ -180,14 +222,11 @@ Item {
 
     Menu {
         id: rootMenu
-        title: "Menu"
+        title: qsTr("Menu")
         x:parent.width - rootMenu.width
         y: -rootMenu.height
-        property bool isClosing: false
-        width: parent.width < 300 * QgsQuick.Utils.dp ? parent.width : 300 * QgsQuick.Utils.dp
-        closePolicy: Popup.CloseOnReleaseOutside
-
-        onAboutToHide: isClosing = true
+        width: parent.width < 300 * __dp ? parent.width : 300 * __dp
+        closePolicy: Popup.CloseOnReleaseOutsideParent | Popup.CloseOnEscape
 
         MenuItem {
             width: parent.width
@@ -199,7 +238,7 @@ Item {
                 rowHeight: height
                 width: parent.width
                 contentText: qsTr("Projects")
-                imageSource: "project.svg"
+                imageSource: InputStyle.projectIcon
             }
 
             onClicked: {
@@ -218,7 +257,7 @@ Item {
                 rowHeight: height
                 width: parent.width
                 contentText: qsTr("GPS")
-                imageSource: __appSettings.autoCenterMapChecked ? "ic_gps_fixed_48px.svg" : "ic_gps_not_fixed_48px.svg"
+                imageSource: __appSettings.autoCenterMapChecked ? InputStyle.gpsFixedIcon : InputStyle.gpsNotFixedIcon
 
                 RoundIndicator {
                     width: parent.height/4
@@ -247,15 +286,7 @@ Item {
                 rowHeight: height
                 width: parent.width
                 contentText: qsTr("Record")
-
-                RecordBtn {
-                    id: recBtnIcon2
-                    width: mainPanel.itemSize
-                    anchors.margins: width/4
-                    anchors.topMargin: -anchors.margins/2
-                    enabled: true
-                    color: InputStyle.fontColor
-                }
+                imageSource: InputStyle.recordIcon
             }
 
             onClicked: {
@@ -274,7 +305,7 @@ Item {
                 rowHeight: height
                 width: parent.width
                 contentText: qsTr("Zoom to project")
-                imageSource: "zoom_to_project.svg"
+                imageSource: InputStyle.zoomToProjectIcon
             }
 
             onClicked: {
@@ -292,8 +323,27 @@ Item {
                 height: mainPanel.itemSize
                 rowHeight: height
                 width: parent.width
+                contentText: qsTr("Browse features")
+                imageSource: InputStyle.tableIcon
+            }
+
+            onClicked: {
+                browseDataBtn.activated()
+                rootMenu.close()
+            }
+        }
+
+        MenuItem {
+            width: parent.width
+            visible: !mapThemesItem.visible
+            height: visible ? mainPanel.itemSize : 0
+
+            ExtendedMenuItem {
+                height: mainPanel.itemSize
+                rowHeight: height
+                width: parent.width
                 contentText: qsTr("Map themes")
-                imageSource: "map_styles.svg"
+                imageSource: InputStyle.mapThemesIcon
             }
 
             onClicked: {
@@ -312,7 +362,7 @@ Item {
                 rowHeight: parent.height
                 width: parent.width
                 contentText: qsTr("Settings")
-                imageSource: "settings.svg"
+                imageSource: InputStyle.settingsIcon
             }
 
             onClicked: {
@@ -332,6 +382,4 @@ Item {
         layer.effect: Shadow {}
         visible: rootMenu.opened
     }
-
-
 }

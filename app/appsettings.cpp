@@ -1,20 +1,35 @@
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+
 #include "appsettings.h"
+#include "coreutils.h"
 
 #include <QSettings>
 #include <QFileInfo>
 
+const QString AppSettings::GROUP_NAME = QStringLiteral( "inputApp" );
+const QString AppSettings::POSITION_PROVIDERS_GROUP = QStringLiteral( "inputApp/positionProviders" );
+
 AppSettings::AppSettings( QObject *parent ): QObject( parent )
 {
-  mDefaultLayers = QHash<QString, QString>();
-  reloadDefaultLayers();
-
   QSettings settings;
-  settings.beginGroup( mGroupName );
+  settings.beginGroup( GROUP_NAME );
   QString path = settings.value( "defaultProject", "" ).toString();
   QString layer = settings.value( "defaultLayer/"  + path, "" ).toString();
   bool autoCenter = settings.value( "autoCenter", false ).toBool();
-  int gpsTolerance = settings.value( "gpsTolerance", 10 ).toInt();
+  double gpsTolerance = settings.value( "gpsTolerance", 10 ).toDouble();
+  bool gpsAccuracyWarning = settings.value( "gpsAccuracyWarning", true ).toBool();
   int lineRecordingInterval = settings.value( "lineRecordingInterval", 3 ).toInt();
+  bool reuseLastEnteredValues = settings.value( "reuseLastEnteredValues", false ).toBool();
+  QString savedAppVersion = settings.value( QStringLiteral( "appVersion" ), QStringLiteral() ).toString();
+  bool legacyFolderMigrated = settings.value( QStringLiteral( "legacyFolderMigrated" ), false ).toBool();
+  QString activeProviderId = settings.value( QStringLiteral( "activePositionProviderId" ) ).toString();
   settings.endGroup();
 
   setDefaultProject( path );
@@ -22,7 +37,12 @@ AppSettings::AppSettings( QObject *parent ): QObject( parent )
   setDefaultLayer( layer );
   setAutoCenterMapChecked( autoCenter );
   setGpsAccuracyTolerance( gpsTolerance );
+  setGpsAccuracyWarning( gpsAccuracyWarning );
   setLineRecordingInterval( lineRecordingInterval );
+  setReuseLastEnteredValues( reuseLastEnteredValues );
+  setAppVersion( savedAppVersion );
+  setLegacyFolderMigrated( legacyFolderMigrated );
+  setActivePositionProviderId( activeProviderId );
 }
 
 QString AppSettings::defaultLayer() const
@@ -34,31 +54,11 @@ void AppSettings::setDefaultLayer( const QString &value )
 {
   if ( defaultLayer() != value )
   {
-    QSettings settings;
-    settings.beginGroup( mGroupName );
-    settings.setValue( "defaultLayer/" + mActiveProject, value );
-    settings.endGroup();
+    setValue( "defaultLayer/" + mActiveProject, value );
     mDefaultLayers.insert( mActiveProject, value );
     emit defaultLayerChanged();
   }
 }
-
-void AppSettings::reloadDefaultLayers()
-{
-  QSettings settings;
-  settings.beginGroup( mGroupName );
-  for ( QString key : settings.allKeys() )
-  {
-    if ( key.startsWith( "defaultLayer/" ) )
-    {
-      QVariant value = settings.value( key );
-      mDefaultLayers.insert( key.replace( "defaultLayer", "" ), value.toString() );
-    }
-  }
-
-  settings.endGroup();
-}
-
 
 QString AppSettings::defaultProject() const
 {
@@ -70,10 +70,7 @@ void AppSettings::setDefaultProject( const QString &value )
   if ( mDefaultProject != value )
   {
     mDefaultProject = value;
-    QSettings settings;
-    settings.beginGroup( mGroupName );
-    settings.setValue( "defaultProject", value );
-    settings.endGroup();
+    setValue( "defaultProject", value );
 
     emit defaultProjectChanged();
   }
@@ -106,10 +103,7 @@ void AppSettings::setAutoCenterMapChecked( bool value )
   if ( mAutoCenterMapChecked != value )
   {
     mAutoCenterMapChecked = value;
-    QSettings settings;
-    settings.beginGroup( mGroupName );
-    settings.setValue( "autoCenter", value );
-    settings.endGroup();
+    setValue( "autoCenter", value );
 
     emit autoCenterMapCheckedChanged();
   }
@@ -126,20 +120,17 @@ QString AppSettings::defaultProjectName() const
   return QString( "" );
 }
 
-int AppSettings::gpsAccuracyTolerance() const
+double AppSettings::gpsAccuracyTolerance() const
 {
   return mGpsAccuracyTolerance;
 }
 
-void AppSettings::setGpsAccuracyTolerance( int value )
+void AppSettings::setGpsAccuracyTolerance( double value )
 {
   if ( mGpsAccuracyTolerance != value )
   {
     mGpsAccuracyTolerance = value;
-    QSettings settings;
-    settings.beginGroup( mGroupName );
-    settings.setValue( "gpsTolerance", value );
-    settings.endGroup();
+    setValue( "gpsTolerance", value );
 
     emit gpsAccuracyToleranceChanged();
   }
@@ -155,11 +146,160 @@ void AppSettings::setLineRecordingInterval( int value )
   if ( mLineRecordingInterval != value )
   {
     mLineRecordingInterval = value;
-    QSettings settings;
-    settings.beginGroup( mGroupName );
-    settings.setValue( "lineRecordingInterval", value );
-    settings.endGroup();
+    setValue( "lineRecordingInterval", value );
 
     emit lineRecordingIntervalChanged();
   }
+}
+
+bool AppSettings::demoProjectsCopied()
+{
+  return value( QStringLiteral( "demoProjectsCopied" ), QVariant( false ) ).toBool();
+}
+
+void AppSettings::setDemoProjectsCopied( const bool value )
+{
+  setValue( "demoProjectsCopied", value );
+}
+
+bool AppSettings::reuseLastEnteredValues() const
+{
+  return mReuseLastEnteredValues;
+}
+
+void AppSettings::setReuseLastEnteredValues( bool reuseLastEnteredValues )
+{
+  if ( mReuseLastEnteredValues != reuseLastEnteredValues )
+  {
+    setValue( "reuseLastEnteredValues", reuseLastEnteredValues );
+    mReuseLastEnteredValues = reuseLastEnteredValues;
+    emit reuseLastEnteredValuesChanged( mReuseLastEnteredValues );
+  }
+}
+
+bool AppSettings::gpsAccuracyWarning() const
+{
+  return mGpsAccuracyWarning;
+}
+
+void AppSettings::setGpsAccuracyWarning( bool gpsAccuracyWarning )
+{
+  if ( mGpsAccuracyWarning != gpsAccuracyWarning )
+  {
+    mGpsAccuracyWarning = gpsAccuracyWarning;
+    setValue( "gpsAccuracyWarning", gpsAccuracyWarning );
+    emit gpsAccuracyWarningChanged();
+  }
+}
+
+QString AppSettings::appVersion() const
+{
+  return mAppVersion;
+}
+
+void AppSettings::setAppVersion( const QString &newAppVersion )
+{
+  if ( mAppVersion == newAppVersion )
+    return;
+
+  mAppVersion = newAppVersion;
+  setValue( QStringLiteral( "appVersion" ), newAppVersion );
+  emit appVersionChanged( mAppVersion );
+}
+
+bool AppSettings::legacyFolderMigrated()
+{
+  return mLegacyFolderMigrated;
+}
+
+void AppSettings::setLegacyFolderMigrated( bool hasBeenMigrated )
+{
+  if ( mLegacyFolderMigrated == hasBeenMigrated )
+    return;
+
+  mLegacyFolderMigrated = hasBeenMigrated;
+  setValue( QStringLiteral( "legacyFolderMigrated" ), hasBeenMigrated );
+  emit legacyFolderMigratedChanged( mLegacyFolderMigrated );
+}
+
+const QString &AppSettings::activePositionProviderId() const
+{
+  return mActivePositionProviderId;
+}
+
+void AppSettings::setActivePositionProviderId( const QString &id )
+{
+  if ( mActivePositionProviderId == id )
+    return;
+
+  mActivePositionProviderId = id;
+  setValue( QStringLiteral( "activePositionProviderId" ), id );
+  emit activePositionProviderIdChanged( mActivePositionProviderId );
+}
+
+QVariantList AppSettings::savedPositionProviders() const
+{
+  QSettings settings;
+  QVariantList providers;
+
+  int size = settings.beginReadArray( POSITION_PROVIDERS_GROUP );
+
+  for ( int i = 0; i < size; i++ )
+  {
+    settings.setArrayIndex( i );
+    QStringList provider;
+    provider << settings.value( "providerName" ).toString();
+    provider << settings.value( "providerAddress" ).toString();
+    providers.push_back( provider );
+  }
+
+  settings.endArray();
+
+  return providers;
+}
+
+void AppSettings::savePositionProviders( const QVariantList &providers )
+{
+  QSettings settings;
+
+  if ( settings.contains( POSITION_PROVIDERS_GROUP ) )
+  {
+    settings.remove( POSITION_PROVIDERS_GROUP );
+  }
+
+  settings.beginWriteArray( POSITION_PROVIDERS_GROUP );
+
+  for ( int i = 0; i < providers.count(); i++ )
+  {
+    QVariantList provider = providers[i].toList();
+
+    if ( provider.length() < 2 )
+    {
+      CoreUtils::log( QStringLiteral( "AppSettings" ), QStringLiteral( "Tried to save provider without sufficient data" ) );
+      continue;
+    }
+    settings.setArrayIndex( i );
+
+    settings.setValue( "providerName", providers[i].toList()[0] );
+    settings.setValue( "providerAddress", providers[i].toList()[1] );
+  }
+  settings.endArray();
+}
+
+void AppSettings::setValue( const QString &key, const QVariant &value )
+{
+  QSettings settings;
+  settings.beginGroup( GROUP_NAME );
+  settings.setValue( key, value );
+  settings.endGroup();
+}
+
+QVariant AppSettings::value( const QString &key, const QVariant &defaultValue )
+{
+  QSettings settings;
+  settings.beginGroup( GROUP_NAME );
+  QVariant value = settings.value( key, defaultValue );
+  settings.endGroup();
+
+  return value;
 }

@@ -19,6 +19,9 @@
 #include <QObject>
 #include <QVariantMap>
 
+class PositionKit;
+class Compass;
+
 /**
  * The class suppose to be used in QML to invoke iOS image picker and postprocess the image if any has been choosen.
 */
@@ -26,31 +29,60 @@ class IOSImagePicker : public QObject
 {
     Q_OBJECT
   public:
-    explicit IOSImagePicker( QObject *parent = nullptr );
-    //! Absolute path to the location where an image suppose to be copied according external widget
-    Q_PROPERTY( QString targetDir READ targetDir WRITE setTargetDir NOTIFY targetDirChanged )
-    //! Method suppose to be used in QML and calls IOSImagePicker::showImagePickerDirect which invokes IOSViewDelegate and image picker.
-    Q_INVOKABLE void showImagePicker();
+    ~IOSImagePicker() = default;
+    /**
+    * Method suppose to be used in QML and calls IOSImagePicker::showImagePickerDirect which invokes IOSViewDelegate and image picker.
+    * \param targetDir - String representing directory path where captured photo suppose to be saved.
+    */
+    Q_INVOKABLE void showImagePicker( const QString  &targetDir );
+
+    /**
+    * Method suppose to be used in QML and calls IOSImagePicker::showImagePickerDirect which invokes IOSViewDelegate and image picker.
+    * \param targetDir - String representing directory path where captured photo suppose to be saved.
+    * \param position - object to get GPS EXIF data from
+    * \param compass - object to get GPS direction for EXIF data
+    */
+    Q_INVOKABLE void callCamera( const QString  &targetDir, PositionKit *positionKit, Compass *compass );
+
+    /**
+     * Calls the objective-c function to read EXIF metadata.
+     */
+    static QString readExifDirect( const QString &filepath, const QString &tag );
 
     QString targetDir() const;
     void setTargetDir( const QString &targetDir );
+    void setPositionKit( PositionKit *positionKit );
+    PositionKit *positionKit() const;
+
+    Compass *compass() const;
+    void setCompass( Compass *compass );
 
   signals:
     void targetDirChanged();
-    void imageSaved( const QString &absoluteImagePath );
+    void positionKitChanged();
+    void compassChanged();
+    void imageCaptured( const QString &absoluteImagePath );
+    void notify( const QString &message );
 
   public slots:
     /**
-     * Callback after succesfuly choosing an image - saves image at targetDir location.
+     * Callback after succesfuly captured photo - saves image at targetDir location.
+     * After successful image selection from a gallery, only emits a singal with final location from result data.
      */
     void onImagePickerFinished( bool successful, const QVariantMap &data );
 
   private:
     QString mTargetDir;
+    PositionKit *mPositionKit = nullptr;
+    Compass *mCompass = nullptr;
 
     /**
      * Calls the objective-c function to show image picker.
      */
-    void showImagePickerDirect( int sourceType, IOSImagePicker *handler );
+    void showImagePickerDirect( IOSImagePicker *handler );
+    /**
+     * Calls the objective-c function to open camera.
+     */
+    void callCameraDirect( IOSImagePicker *handler );
 };
 #endif // IOSIMAGEPICKER_H

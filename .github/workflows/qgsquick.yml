@@ -1,0 +1,34 @@
+name: QgsQuick
+on:
+  push:
+    paths:
+    - 'qgsquick/**'
+    - 'scripts/**'
+    - 'app/**'
+    - '.github/workflows/qgsquick.yml'
+
+  release:
+    types:
+      - published
+
+env:
+  QGIS_COMMIT_HASH: df3695aa85ed5eaa3071befa8f20e7a383473b43
+
+jobs:
+  qgsquick_up_to_date:
+    if: ( github.repository == 'lutraconsulting/input' ) && (!contains(github.event.head_commit.message, 'Translate '))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: download qgis
+        run: |
+          git clone https://github.com/qgis/QGIS.git --depth 1
+          cd QGIS
+          git fetch --depth 1 origin ${QGIS_COMMIT_HASH}
+          git checkout FETCH_HEAD
+          cd ..
+
+      - name: run check the qgsquick is up-to-date
+        run: |
+          ./scripts/copy_qgsquick.bash QGIS/

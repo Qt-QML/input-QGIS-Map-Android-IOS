@@ -1,43 +1,51 @@
-import QtQuick 2.7
-import QtQuick.Controls 2.2
+/***************************************************************************
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ ***************************************************************************/
+
+import QtQuick 2.14
+import QtQuick.Controls 2.14
 
 import lc 1.0
-import QgsQuick 0.1 as QgsQuick
 import "."  // import InputStyle singleton
+import "./components"
 
 Drawer {
 
-    property int activeThemeIndex: 0
-
     id: mapThemePanel
     visible: false
-    modal: false
-    interactive: true
+    modal: true
+    interactive: false
     dragMargin: 0 // prevents opening the drawer by dragging.
 
     background: Rectangle {
         color: InputStyle.clrPanelMain
     }
-    Rectangle {
-        id: header
-        height: InputStyle.rowHeightHeader
-        width: parent.width
-        color: InputStyle.panelBackgroundLight
 
-        Text {
-            anchors.fill: parent
-            anchors.leftMargin: InputStyle.panelMargin
-            anchors.rightMargin: InputStyle.panelMargin
-            text: "Map themes"
-            color: InputStyle.fontColor
-            font.pixelSize: InputStyle.fontPixelSizeTitle
-            font.bold: true
-            horizontalAlignment: Text.AlignLeft
-            verticalAlignment: Text.AlignVCenter
+    Item {
+      focus: true
+      Keys.onReleased: {
+        if (event.key === Qt.Key_Back || event.key === Qt.Key_Escape) {
+          mapThemePanel.close()
         }
+      }
+    }
 
-        layer.enabled: true
-        layer.effect: Shadow {}
+    PanelHeader {
+          id: header
+          height: InputStyle.rowHeightHeader
+          width: parent.width
+          color: InputStyle.panelBackgroundLight
+          rowHeight: InputStyle.rowHeightHeader
+          titleText: qsTr("Map Themes")
+          onBack: mapThemePanel.close()
+          withBackButton: true
+          layer.enabled: true
+          layer.effect: Shadow {}
     }
 
     ListView {
@@ -55,15 +63,12 @@ Drawer {
         property int cellHeight: InputStyle.rowHeight
         property int borderWidth: 1
 
-        Label {
+        TextHyperlink {
             anchors.fill: parent
-            horizontalAlignment: Qt.AlignHCenter
-            verticalAlignment: Qt.AlignVCenter
             visible: parent.count == 0
-            text: qsTr("No themes in the project!")
-            color: InputStyle.fontColor
-            font.pixelSize: InputStyle.fontPixelSizeNormal
-            font.bold: true
+            text: qsTr("Project has no themes defined. See %1how to setup themes%2.")
+                  .arg("<a href='"+ __inputHelp.howToSetupThemesLink +"'>")
+                  .arg("</a>")
         }
 
     }
@@ -72,20 +77,17 @@ Drawer {
         id: delegateItem
         Rectangle {
             id: itemContainer
-            property color primaryColor: InputStyle.clrPanelMain
-            property color secondaryColor: InputStyle.fontColorBright
             width: listView.cellWidth
             height: listView.cellHeight
             anchors.leftMargin: InputStyle.panelMargin
             anchors.rightMargin: InputStyle.panelMargin
-            color: item.highlight ? secondaryColor : primaryColor
+            color: item.highlight ? InputStyle.panelItemHighlight : InputStyle.clrPanelMain
 
             MouseArea {
                 anchors.fill: parent
                 onClicked: {
-                    __mapThemesModel.applyTheme(name)
-                    activeThemeIndex = index
-                    mapThemePanel.close()
+                  __loader.setActiveMapTheme( index )
+                  mapThemePanel.close()
                 }
             }
 
@@ -93,11 +95,11 @@ Drawer {
                 id: item
                 panelMargin: InputStyle.panelMargin
                 contentText: name
-                imageSource: "map_styles.svg"
+                imageSource: InputStyle.mapThemesIcon
                 anchors.rightMargin: panelMargin
                 anchors.leftMargin: panelMargin
-                highlight: activeThemeIndex === index
-                showBorder: activeThemeIndex - 1 !== index
+                highlight: __mapThemesModel.activeThemeIndex === index
+                showBorder: __mapThemesModel.activeThemeIndex - 1 !== index && __mapThemesModel.activeThemeIndex !== index
             }
         }
 

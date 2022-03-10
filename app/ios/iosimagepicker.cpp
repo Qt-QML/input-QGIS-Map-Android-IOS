@@ -21,15 +21,27 @@
 #include <QImageWriter>
 #include <QUrl>
 
-IOSImagePicker::IOSImagePicker( QObject *parent ) : QObject( parent )
-{
-}
-
-void IOSImagePicker::showImagePicker()
+void IOSImagePicker::showImagePicker( const QString  &targetDir )
 {
 #ifdef Q_OS_IOS
-  int sourceType = 0; // ImageGallery
-  showImagePickerDirect( sourceType, this );
+  setTargetDir( targetDir );
+  showImagePickerDirect( this );
+#else
+  Q_UNUSED( targetDir )
+#endif
+}
+
+void IOSImagePicker::callCamera( const QString &targetDir, PositionKit *positionKit, Compass *compass )
+{
+#ifdef Q_OS_IOS
+  setTargetDir( targetDir );
+  setPositionKit( positionKit );
+  setCompass( compass );
+  callCameraDirect( this );
+#else
+  Q_UNUSED( targetDir )
+  Q_UNUSED( positionKit )
+  Q_UNUSED( compass )
 #endif
 }
 
@@ -44,22 +56,39 @@ void IOSImagePicker::setTargetDir( const QString &targetDir )
   emit targetDirChanged();
 }
 
+void IOSImagePicker::setPositionKit( PositionKit *positionKit )
+{
+  mPositionKit = positionKit;
+  emit positionKitChanged();
+}
+
 void IOSImagePicker::onImagePickerFinished( bool successful, const QVariantMap &data )
 {
   if ( successful )
   {
-    QImage image = data["image"].value<QImage>();
-    QString absoluteImagePath = QString( "%1/%2.jpg" ).arg( mTargetDir, QDateTime::currentDateTime().toString( QStringLiteral( "yyMMdd-hhmmss" ) ) );
-
-    image.save( absoluteImagePath );
-    QImageWriter writer;
-    writer.setFileName( absoluteImagePath );
-    if ( !writer.write( image ) )
-    {
-      qWarning() << QString( "Failed to save %1 : %2" ).arg( absoluteImagePath ).arg( writer.errorString() );
-    }
-
-    QUrl url = QUrl::fromLocalFile( absoluteImagePath );
-    emit imageSaved( url.toString() );
+    QString imagePath = data["imagePath"].value<QString>();
+    emit imageCaptured( imagePath );
   }
+  else
+  {
+    QString msg = QString( "Error:%1" ).arg( data["error"].value<QString>() );
+    qWarning() << msg;
+    emit notify( msg );
+  }
+}
+
+Compass *IOSImagePicker::compass() const
+{
+  return mCompass;
+}
+
+void IOSImagePicker::setCompass( Compass *compass )
+{
+  mCompass = compass;
+  emit compassChanged();
+}
+
+PositionKit *IOSImagePicker::positionKit() const
+{
+  return mPositionKit;
 }

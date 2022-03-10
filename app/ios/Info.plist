@@ -15,11 +15,11 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.2</string>
+	<string>1.3.1</string>
 	<key>CFBundleSignature</key>
 	<string>${QMAKE_PKGINFO_TYPEINFO}</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
@@ -27,21 +27,52 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Program requires access to camera to take pictures for features on map</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Program requires GPS to show you current position on map</string>
+	<string>Program requires GPS to show you current position on map and capture spatial data for surveying</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Program requires GPS to show you current position on map.</string>
+	<string>Program requires GPS to show you current position on map and capture spatial data for surveying.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>Program requires GPS to show you current position on map</string>
+	<string>Program requires GPS to show you current position on map and capture spatial data for surveying</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Program requires GPS to show you current position on map</string>
+	<string>Program requires GPS to show you current position on map and capture spatial data for surveying</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Program requires access to gallery to attach pictures to features on map</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Program requires access to gallery to attach pictures to features on map</string>
+    <string>Program requires access to gallery to attach pictures to features on map</string>
+    <key>NSBluetoothAlwaysUsageDescription-macos</key>
+    <string>Program requires access to bluetooth to connect to external GPS receivers</string>
+    <key>NSBluetoothPeripheralUsageDescription-macos</key>
+	<string>Program requires access to bluetooth to connect to external GPS receivers</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fi</string>
+		<string>et</string>
+		<string>es</string>
+		<string>fr</string>
+		<string>ko</string>
+		<string>sl</string>
+		<string>zh</string>
+		<string>he</string>
+		<string>zh_CN</string>
+		<string>uk_UA</string>
+		<string>ru_RU</string>
+		<string>nl</string>
+        	<string>de</string>
+       		<string>it</string>
+        	<string>pl</string>
+        	<string>pt_PT</string>
+        	<string>hr_HR</string>
+        	<string>ca</string>
+        	<string>ar</string>
+        	<string>tr</string>
+        	<string>sk</string>
+        	<string>ja_JP</string>
+        	<string>af_ZA</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
-  <string>InputScreen</string>
+    <string>InputScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

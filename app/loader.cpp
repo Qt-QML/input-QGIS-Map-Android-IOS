@@ -14,17 +14,41 @@
  ***************************************************************************/
 
 #include "loader.h"
+#include "inpututils.h"
+#include "coreutils.h"
 #include "qgsvectorlayer.h"
+#include "qgslayertree.h"
+#include "qgslayertreelayer.h"
+#include "qgslayertreegroup.h"
+#include "qgsmapthemecollection.h"
+#include "qgsquickmapsettings.h"
+#include <qgsapplication.h>
+#include <qgslogger.h>
+
 #if VERSION_INT >= 30500
 // this header only exists in QGIS >= 3.6
 #include "qgsexpressioncontextutils.h"
 #endif
 #include <QDebug>
 
+#include <qgsprojectviewsettings.h>
+#include <QStandardPaths>
+#include <QTimer>
+
 const QString Loader::LOADING_FLAG_FILE_PATH = QString( "%1/.input_loading_project" ).arg( QStandardPaths::standardLocations( QStandardPaths::TempLocation ).first() );
 
-Loader::Loader( QObject *parent )
-  : QObject( parent )
+Loader::Loader( MapThemesModel &mapThemeModel
+                , AppSettings &appSettings
+                , ActiveLayer &activeLayer
+                , LayersProxyModel &recordingLayerPM
+                , QObject *parent ) :
+
+  QObject( parent )
+  , mMapThemeModel( mapThemeModel )
+  , mAppSettings( appSettings )
+  , mActiveLayer( activeLayer )
+  , mRecordingLayerPM( recordingLayerPM )
+  , mProjectLoadingLog( "" )
 {
   // we used to have our own QgsProject instance, but unfortunately few pieces of qgis_core
   // still work with QgsProject::instance() singleton hardcoded (e.g. vector layer's feature
@@ -38,12 +62,6 @@ QgsProject *Loader::project()
   return mProject;
 }
 
-void Loader::setPositionKit( QgsQuickPositionKit *kit )
-{
-  mPositionKit = kit;
-  emit positionKitChanged();
-}
-
 void Loader::setRecording( bool isRecordingOn )
 {
   if ( mRecording != isRecordingOn )
@@ -55,19 +73,37 @@ void Loader::setRecording( bool isRecordingOn )
 
 bool Loader::load( const QString &filePath )
 {
-  qDebug() << "Loading " << filePath;
+  return forceLoad( filePath, false );
+}
+
+bool Loader::forceLoad( const QString &filePath, bool force )
+{
+  qDebug() << "Loading " << filePath << force;
   // Just clear project if empty
   if ( filePath.isEmpty() )
   {
+    emit projectWillBeReloaded( QString() );
     mProject->clear();
-    emit projectReloaded();
+    whileBlocking( &mActiveLayer )->resetActiveLayer();
+    emit projectReloaded( mProject );
     return true;
   }
 
-  emit loadingStarted();
+  if ( !force )
+    emit loadingStarted();
   QFile flagFile( LOADING_FLAG_FILE_PATH );
   flagFile.open( QIODevice::WriteOnly );
   flagFile.close();
+
+  mProjectLoadingLog.clear();
+
+  QString logFilePath = CoreUtils::logFilename();
+  qint64 alreadyAppendedCharsCount = 0;
+
+  {
+    QFile file( logFilePath );
+    alreadyAppendedCharsCount = file.size();
+  }
 
   // Give some time to other (GUI) processes before loading a project in the main thread
   QEventLoop loop;
@@ -77,14 +113,58 @@ bool Loader::load( const QString &filePath )
   loop.exec();
 
   bool res = true;
-  if ( mProject->fileName() != filePath )
+  if ( mProject->fileName() != filePath || force )
   {
+    emit projectWillBeReloaded( filePath );
     res = mProject->read( filePath );
-    emit projectReloaded();
+    mActiveLayer.resetActiveLayer();
+    mMapThemeModel.reloadMapThemes( mProject );
+
+    QgsVectorLayer *defaultLayer = mRecordingLayerPM.layerFromLayerName( mAppSettings.defaultLayer() );
+    if ( defaultLayer )
+      setActiveLayer( defaultLayer );
+    else
+      setActiveLayer( mRecordingLayerPM.firstUsableLayer() );
+
+    setMapSettingsLayers();
+
+    emit projectReloaded( mProject );
+  }
+
+  bool foundInvalidLayer = false;
+  QStringList invalidLayers;
+  for ( QgsMapLayer *layer : mProject->mapLayers().values() )
+  {
+    if ( !layer->isValid() )
+    {
+      invalidLayers.append( layer->name() );
+      foundInvalidLayer = true;
+      emit reportIssue( layer->name(), layer->publicSource() );
+    }
   }
 
   flagFile.remove();
-  emit loadingFinished();
+  if ( !force )
+  {
+    emit loadingFinished();
+    if ( foundInvalidLayer )
+    {
+      QString message = QStringLiteral( "WARNING: The following layers are invalid: %1" ).arg( invalidLayers.join( ", " ) );
+      CoreUtils::log( "project loading", message );
+
+      QFile file( logFilePath );
+      if ( file.open( QIODevice::ReadOnly ) )
+      {
+        file.seek( alreadyAppendedCharsCount );
+        QByteArray neededLogFileData = file.readAll();
+        mProjectLoadingLog = QString::fromStdString( neededLogFileData.toStdString() );
+        file.close();
+      }
+      emit qgisLogChanged();
+      emit setProjectIssuesHeader( "The following layers failed loading:" );
+      emit loadingErrorFound();
+    }
+  }
   return res;
 }
 
@@ -92,130 +172,197 @@ bool Loader::reloadProject( QString projectDir )
 {
   if ( mProject->homePath() == projectDir )
   {
-    return load( mProject->fileName() );
+    return forceLoad( mProject->fileName(), true );
   }
   return false;
+}
+
+void Loader::setMapSettings( QgsQuickMapSettings *mapSettings )
+{
+  if ( mMapSettings == mapSettings )
+    return;
+
+  mMapSettings = mapSettings;
+  setMapSettingsLayers();
+
+  emit mapSettingsChanged();
+}
+
+void Loader::setMapSettingsLayers() const
+{
+  if ( !mProject || !mMapSettings ) return;
+
+  QgsLayerTree *root = mProject->layerTreeRoot();
+
+  // Get list of all visible and valid layers in the project
+  QList< QgsMapLayer * > allLayers;
+  foreach ( QgsLayerTreeLayer *nodeLayer, root->findLayers() )
+  {
+    if ( nodeLayer->isVisible() )
+    {
+      QgsMapLayer *layer = nodeLayer->layer();
+      if ( layer && layer->isValid() )
+      {
+        allLayers << layer;
+      }
+    }
+  }
+
+  mMapSettings->setLayers( allLayers );
+  mMapSettings->setTransformContext( mProject->transformContext() );
+}
+
+QgsQuickMapSettings *Loader::mapSettings() const
+{
+  return mMapSettings;
 }
 
 void Loader::zoomToProject( QgsQuickMapSettings *mapSettings )
 {
   if ( !mapSettings )
   {
-    qDebug() << "Cannot zoom to layers extent, mapSettings is not defined";
+    qDebug() << "Cannot zoom to extent, mapSettings is not defined";
     return;
   }
-
-  const QVector<QgsMapLayer *> layers = mProject->layers<QgsMapLayer *>();
   QgsRectangle extent;
-  for ( const QgsMapLayer *layer : layers )
+
+  QgsProjectViewSettings *viewSettings = mProject->viewSettings();
+  extent = viewSettings->presetFullExtent();
+  if ( extent.isNull() )
   {
-    QgsRectangle layerExtent = mapSettings->mapSettings().layerExtentToOutputExtent( layer, layer->extent() );
-    extent.combineExtentWith( layerExtent );
+    bool hasWMS;
+    QStringList WMSExtent = mProject->readListEntry( "WMSExtent", QStringLiteral( "/" ), QStringList(), &hasWMS );
+
+    if ( hasWMS && ( WMSExtent.length() == 4 ) )
+    {
+      extent.set( WMSExtent[0].toDouble(), WMSExtent[1].toDouble(), WMSExtent[2].toDouble(), WMSExtent[3].toDouble() );
+    }
+    else // set layers extent
+    {
+      const QVector<QgsMapLayer *> layers = mProject->layers<QgsMapLayer *>();
+      for ( const QgsMapLayer *layer : layers )
+      {
+        QgsRectangle layerExtent = mapSettings->mapSettings().layerExtentToOutputExtent( layer, layer->extent() );
+        extent.combineExtentWith( layerExtent );
+      }
+    }
+  }
+
+  if ( extent.isEmpty() )
+  {
+    extent.grow( mProject->crs().isGeographic() ? 0.01 : 1000.0 );
   }
   extent.scale( 1.05 );
   mapSettings->setExtent( extent );
 }
 
-QString Loader::featureTitle( QgsQuickFeatureLayerPair pair )
+bool Loader::layerVisible( QgsMapLayer *layer )
 {
-  QgsExpressionContext context( globalProjectLayerScopes( pair.layer() ) );
-  context.setFeature( pair.feature() );
-  QgsExpression expr( pair.layer()->displayExpression() );
-  return expr.evaluate( &context ).toString();
-}
+  if ( !layer ) return false;
 
-QString Loader::mapTipHtml( QgsQuickFeatureLayerPair pair )
-{
-  QgsExpressionContext context( globalProjectLayerScopes( pair.layer() ) );
-  context.setFeature( pair.feature() );
-  return QgsExpression::replaceExpressionText( pair.layer()->mapTipTemplate(), &context );
-}
-
-QString Loader::mapTipType( QgsQuickFeatureLayerPair pair )
-{
-  // Stripping extra CR char to unify Windows lines with Unix.
-  QString mapTip = pair.layer()->mapTipTemplate().replace( QStringLiteral( "\r" ), QStringLiteral( "" ) );
-  if ( mapTip.startsWith( "# image\n" ) )
-    return "image";
-  else if ( mapTip.startsWith( "# fields\n" ) || mapTip.isEmpty() )
-    return "fields";
-  else
-    return "html";
-}
-
-QString Loader::mapTipImage( QgsQuickFeatureLayerPair pair )
-{
-  QgsExpressionContext context( globalProjectLayerScopes( pair.layer() ) );
-  context.setFeature( pair.feature() );
-  QString mapTip = pair.layer()->mapTipTemplate();
-  QStringList lst = mapTip.split( '\n' ); // first line is "# image"
-  if ( lst.count() >= 2 )
-    return QgsExpression::replaceExpressionText( lst[1], &context );
-  else
-    return QString();
-}
-
-QStringList Loader::mapTipFields( QgsQuickFeatureLayerPair pair )
-{
-  QString mapTip = pair.layer()->mapTipTemplate();
-  QStringList lst;
-  const QgsFields fields = pair.layer()->fields();
-  const int LIMIT = 3;  // max. 3 fields can fit in the preview
-
-  if ( mapTip.isEmpty() )
+  // check if active layer is visible in current map theme too
+  QgsLayerTree *root = QgsProject::instance()->layerTreeRoot();
+  foreach ( QgsLayerTreeLayer *nodeLayer, root->findLayers() )
   {
-    // user has not provided any map tip - let's use first two fields to show
-    // at least something.
-    QString featureTitleExpression = pair.layer()->displayExpression();
-    for ( QgsField field : fields )
+    if ( nodeLayer->isVisible() )
     {
-      if ( featureTitleExpression != field.name() )
-        lst << field.displayName();  // yes, using alias, not the original field name
-      if ( lst.count() == LIMIT )
-        break;
+      QgsMapLayer *nLayer = nodeLayer->layer();
+      if ( nLayer && nLayer->isValid() && nLayer->id() == layer->id() )
+      {
+        return true;
+      }
     }
   }
-  else
-  {
-    // user has specified "# fields" on the first line and then each next line is a field name
-    QStringList lines = mapTip.split( '\n' );
-    for ( int i = 1; i < lines.count(); ++i ) // starting from index to avoid first line with "# fields"
-    {
-      int index = fields.indexFromName( lines[i] );
-      if ( index >= 0 )
-        lst << fields[index].displayName();  // yes, using alias, not the original field name
-      if ( lst.count() == LIMIT )
-        break;
-    }
-  }
-  return lst;
+  return false;
+}
+
+QString Loader::projectLoadingLog() const
+{
+  return mProjectLoadingLog;
+}
+
+void Loader::setActiveMapTheme( int index )
+{
+  QString name = mMapThemeModel.setActiveThemeIndex( index );
+
+  // if active layer is no longer visible
+  if ( !layerVisible( mActiveLayer.layer() ) )
+    setActiveLayer( mRecordingLayerPM.firstUsableLayer() );
+
+  setMapSettingsLayers();
 }
 
 void Loader::appStateChanged( Qt::ApplicationState state )
 {
-#if VERSION_INT >= 30500 // depends on https://github.com/qgis/QGIS/pull/8622
-  if ( !mRecording && mPositionKit )
-  {
-    if ( state == Qt::ApplicationActive )
-    {
-      mPositionKit->source()->startUpdates();
-    }
-    else
-    {
-      mPositionKit->source()->stopUpdates();
-    }
-  }
-#else
-  Q_UNUSED( state );
-#endif
+  QString msg;
+
+  // Instatiate QDebug with QString to redirect output to string
+  // It is used to convert enum to string
+  QDebug logHelper( &msg );
+
+  logHelper << "Application changed state to: " << state;
+  CoreUtils::log( "Input", msg );
 }
 
-QList<QgsExpressionContextScope *> Loader::globalProjectLayerScopes( QgsMapLayer *layer )
+void Loader::appAboutToQuit()
 {
-  // can't use QgsExpressionContextUtils::globalProjectLayerScopes() because it uses QgsProject::instance()
-  QList<QgsExpressionContextScope *> scopes;
-  scopes << QgsExpressionContextUtils::globalScope();
-  scopes << QgsExpressionContextUtils::projectScope( mProject );
-  scopes << QgsExpressionContextUtils::layerScope( layer );
-  return scopes;
+  CoreUtils::log( "Input", "Application has quit" );
+}
+
+void Loader::setActiveLayerByName( QString layerName ) const
+{
+  if ( !layerName.isEmpty() )
+  {
+    QList<QgsMapLayer *> layersByName = QgsProject::instance()->mapLayersByName( layerName );
+
+    if ( !layersByName.isEmpty() )
+    {
+      return setActiveLayer( layersByName.at( 0 ) );
+    }
+  }
+
+  setActiveLayer( nullptr );
+}
+
+void Loader::setActiveLayer( QgsMapLayer *layer ) const
+{
+  if ( !layer || !layer->isValid() )
+    mActiveLayer.resetActiveLayer();
+  else
+  {
+    mActiveLayer.setActiveLayer( layer );
+    mAppSettings.setDefaultLayer( mActiveLayer.layerName() );
+  }
+}
+
+QString Loader::loadIconFromLayer( QgsMapLayer *layer )
+{
+  if ( !layer )
+    return QString();
+
+  QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( layer );
+
+  if ( vectorLayer )
+  {
+    QgsWkbTypes::GeometryType geometry = vectorLayer->geometryType();
+    return iconFromGeometry( geometry );
+  }
+  else
+    return QString( "qrc:/mIconRasterLayer.svg" );
+}
+
+QString Loader::loadIconFromFeature( QgsFeature feature )
+{
+  return iconFromGeometry( feature.geometry().type() );
+}
+
+QString Loader::iconFromGeometry( const QgsWkbTypes::GeometryType &geometry )
+{
+  switch ( geometry )
+  {
+    case QgsWkbTypes::GeometryType::PointGeometry: return QString( "qrc:/mIconPointLayer.svg" );
+    case QgsWkbTypes::GeometryType::LineGeometry: return QString( "qrc:/mIconLineLayer.svg" );
+    case QgsWkbTypes::GeometryType::PolygonGeometry: return QString( "qrc:/mIconPolygonLayer.svg" );
+    default: return QString( "qrc:/mIconTableLayer.svg" );
+  }
 }
